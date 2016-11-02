@@ -29,6 +29,7 @@ namespace Jint.Native.Global
             // Global object properties
             FastAddProperty("Object", Engine.Object, true, false, true);
             FastAddProperty("Function", Engine.Function, true, false, true);
+            FastAddProperty("Symbol", Engine.Symbol, true, false, true);
             FastAddProperty("Array", Engine.Array, true, false, true);
             FastAddProperty("String", Engine.String, true, false, true);
             FastAddProperty("RegExp", Engine.RegExp, true, false, true);
@@ -76,7 +77,7 @@ namespace Jint.Native.Global
                 {
                     sign = -1;
                 }
-                
+
                 if (s[0] == '-' || s[0] == '+')
                 {
                     s = s.Substring(1);
@@ -208,7 +209,7 @@ namespace Jint.Native.Global
                     separator = '.';
                     break;
                 }
-                
+
                 if(c == 'e' || c == 'E')
                 {
                     i++;
@@ -309,7 +310,7 @@ namespace Jint.Native.Global
                     number /= 10;
                 }
             }
-            
+
             return (double) (sign * number);
         }
 
@@ -440,17 +441,17 @@ namespace Jint.Native.Global
                         // 00000yyy yyzzzzzz ->	110yyyyy ; 10zzzzzz
                         octets = new[]
                         {
-                            (byte)(0xC0 | (v >> 6)), 
+                            (byte)(0xC0 | (v >> 6)),
                             (byte)(0x80 | (v & 0x3F))
                         };
                     }
                     else if (v <= 0xD7FF)
                     {
-                        // xxxxyyyy yyzzzzzz -> 1110xxxx; 10yyyyyy; 10zzzzzz	
+                        // xxxxyyyy yyzzzzzz -> 1110xxxx; 10yyyyyy; 10zzzzzz
                         octets = new[]
                         {
-                            (byte)(0xE0 | (v >> 12)), 
-                            (byte)(0x80 | ((v >> 6) & 0x3F)), 
+                            (byte)(0xE0 | (v >> 12)),
+                            (byte)(0x80 | ((v >> 6) & 0x3F)),
                             (byte)(0x80 | (v & 0x3F))
                         };
                     }
@@ -528,7 +529,7 @@ namespace Jint.Native.Global
 
                     if (!IsValidHexaChar(uriString[k + 1]) || !IsValidHexaChar(uriString[k + 2]))
                     {
-                        throw new JavaScriptException(Engine.UriError);    
+                        throw new JavaScriptException(Engine.UriError);
                     }
 
                     var B = Convert.ToByte(uriString[k + 1].ToString() + uriString[k + 2], 16);
@@ -555,15 +556,15 @@ namespace Jint.Native.Global
                         {
                             throw new JavaScriptException(Engine.UriError);
                         }
-                        
+
                         var Octets = new byte[n];
                         Octets[0] = B;
-                        
+
                         if (k + (3*(n - 1)) >= strLen)
                         {
                             throw new JavaScriptException(Engine.UriError);
                         }
-                        
+
                         for(var j=1; j <n; j++)
                         {
                             k++;
@@ -579,7 +580,7 @@ namespace Jint.Native.Global
 
                             B = Convert.ToByte(uriString[k + 1].ToString() + uriString[k + 2], 16);
 
-                            // B & 11000000 != 10000000 
+                            // B & 11000000 != 10000000
                             if ((B & 0xC0) != 0x80)
                             {
                                 throw new JavaScriptException(Engine.UriError);
@@ -594,7 +595,7 @@ namespace Jint.Native.Global
                     }
                 }
             }
-            
+
             return R.ToString();
         }
 

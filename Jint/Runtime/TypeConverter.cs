@@ -7,6 +7,7 @@ using Jint.Native;
 using Jint.Native.Number;
 using Jint.Native.Object;
 using Jint.Native.String;
+using Jint.Native.Symbol;
 
 namespace Jint.Runtime
 {
@@ -18,7 +19,9 @@ namespace Jint.Runtime
         Boolean,
         String,
         Number,
-        Object
+        Object,
+        Completion,
+        Symbol
     }
 
     public class TypeConverter
@@ -44,7 +47,7 @@ namespace Jint.Runtime
             return input.AsObject().DefaultValue(preferredType);
         }
 
-    
+
         /// <summary>
         /// http://www.ecma-international.org/ecma-262/5.1/#sec-9.2
         /// </summary>
@@ -61,7 +64,7 @@ namespace Jint.Runtime
             {
                 return false;
             }
-            
+
             if (o.IsBoolean())
             {
                 return o.AsBoolean();
@@ -107,8 +110,8 @@ namespace Jint.Runtime
             if (o.IsNumber())
             {
                 return o.AsNumber();
-            } 
-            
+            }
+
             if (o.IsObject())
             {
                 var p = o.AsObject() as IPrimitiveInstance;
@@ -176,7 +179,7 @@ namespace Jint.Runtime
                     }
 
                     int i = int.Parse(s.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-                 
+
                     return i;
                 }
                 catch (OverflowException)
@@ -205,7 +208,7 @@ namespace Jint.Runtime
             {
                 return 0;
             }
-            
+
             if (number.Equals(0) || double.IsInfinity(number))
             {
                 return number;
@@ -251,6 +254,11 @@ namespace Jint.Runtime
         /// <returns></returns>
         public static string ToString(JsValue o)
         {
+            if (o.IsString())
+            {
+                return o.AsString();
+            }
+
             if (o.IsObject())
             {
                 var p = o.AsObject() as IPrimitiveInstance;
@@ -258,11 +266,16 @@ namespace Jint.Runtime
                 {
                     o = p.PrimitiveValue;
                 }
-            }
-
-            if (o.IsString())
-            {
-                return o.AsString();
+                else
+                {
+                    var s = o.AsInstance<SymbolInstance>();
+                    if (s != null)
+                    {
+                        // TODO: throw a TypeError
+                        // NB: But it requires an Engine reference
+                        throw new JavaScriptException(new JsValue("TypeError"));
+                    }
+                }
             }
 
             if (o == Undefined.Instance)
@@ -274,7 +287,7 @@ namespace Jint.Runtime
             {
                 return Null.Text;
             }
-            
+
             if (o.IsBoolean())
             {
                 return o.AsBoolean() ? "true" : "false";
@@ -318,6 +331,11 @@ namespace Jint.Runtime
             if (value.IsString())
             {
                 return engine.String.Construct(value.AsString());
+            }
+
+            if (value.IsSymbol())
+            {
+                return engine.Symbol.Construct(value.AsSymbol());
             }
 
             throw new JavaScriptException(engine.TypeError);
@@ -368,7 +386,7 @@ namespace Jint.Runtime
                 {
                     var arg = objectArguments[i];
                     var paramType = parameters[i].ParameterType;
-                    
+
                     if (arg == null)
                     {
                         if (!TypeIsNullable(paramType))
