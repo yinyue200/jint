@@ -10,4 +10,5 @@ test_script:
   - dotnet test .\Jint.Tests\project.json --configuration Release -f netcoreapp1.0
   - dotnet test .\Jint.Tests.CommonScripts\project.json --configuration Release -f netcoreapp1.0
   - dotnet test .\Jint.Tests.Ecma\project.json --configuration Release -f netcoreapp1.0
-deploy: off
+deploy_script:
+  - deploynuget.ps1

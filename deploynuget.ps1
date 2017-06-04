@@ -10,4 +10,4 @@ if([System.IO.File]::Exists("./artifacts")){
 }
 
 dotnet pack $projectjson -c Release -o .\artifacts
-.\.nuget\nuget.exe push .\artifacts\*.nupkg -Source nuget.org -ApiKey $nugetApiKey
+appveyor PushArtifact .\artifacts\*.nupkg
