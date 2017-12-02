@@ -165,10 +165,12 @@ namespace Jint.Runtime.Interop
             {
                 Array enumValues = Enum.GetValues(ReferenceType);
                 Array enumNames = Enum.GetNames(ReferenceType);
+                var enumNameStringComparer = Engine.Options._EnumNameStringComparer;
 
                 for (int i = 0; i < enumValues.Length; i++)
                 {
-                    if (enumNames.GetValue(i) as string == propertyName)
+                    
+                    if (enumNameStringComparer.Equals(enumNames.GetValue(i) as string, propertyName))
                     {
                         return new AllForbiddenPropertyDescriptor((int) enumValues.GetValue(i));
                     }
@@ -176,21 +178,26 @@ namespace Jint.Runtime.Interop
                 return PropertyDescriptor.Undefined;
             }
 
-            var propertyInfo = ReferenceType.GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static);
+            var _CamelCasedProperties = Engine.Options._StaticMemberCamelCasedProperties;
+
+            var propertiesStringComparer = _CamelCasedProperties.PropertiesStringComparer;
+            var propertyInfo = ReferenceType.GetProperties(BindingFlags.Public | BindingFlags.Static).Where(p => propertiesStringComparer.Equals(p.Name, propertyName)).FirstOrDefault();
             if (propertyInfo != null)
             {
                 return new PropertyInfoDescriptor(Engine, propertyInfo, Type);
             }
 
-            var fieldInfo = ReferenceType.GetField(propertyName, BindingFlags.Public | BindingFlags.Static);
+            var fieldsStringComparer = _CamelCasedProperties.FieldsStringComparer;
+            var fieldInfo = ReferenceType.GetFields(BindingFlags.Public | BindingFlags.Static).Where(fi=> fieldsStringComparer.Equals(fi.Name, propertyName)).FirstOrDefault();
             if (fieldInfo != null)
             {
                 return new FieldInfoDescriptor(Engine, fieldInfo, Type);
             }
 
+            var methodsStringComparer = _CamelCasedProperties.MethodsStringComparer;
             var methodInfo = ReferenceType
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
-                .Where(mi => mi.Name == propertyName)
+                .Where(mi => methodsStringComparer.Equals( mi.Name,propertyName))
                 .ToArray();
 
             if (methodInfo.Length == 0)
