@@ -73,12 +73,12 @@ namespace Jint.Runtime
             if (error.IsObject())
             {
                 var oi = error.AsObject();
-                var message = oi.Get("message").AsString();
+                var message = oi.Get("message").ToString();
                 return message;
             }
             if (error.IsString())
                 return error.AsString();
-            
+
             return error.ToString();
         }
 
@@ -110,7 +110,7 @@ namespace Jint.Runtime
                 if (value != null && Error.IsObject())
                 {
                     Error.AsObject()
-                        .FastAddProperty("callstack", new JsValue(value), false, false, false);
+                        .FastAddProperty("callstack", new JsString(value), false, false, false);
                 }
             }
         }

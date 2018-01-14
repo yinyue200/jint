@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using Esprima;
+using Esprima.Ast;
 using Jint.Native;
 using Jint.Native.Argument;
 using Jint.Native.Array;
@@ -15,8 +16,7 @@ using Jint.Native.Number;
 using Jint.Native.Object;
 using Jint.Native.RegExp;
 using Jint.Native.String;
-using Esprima;
-using Esprima.Ast;
+using Jint.Native.Symbol;
 using Jint.Runtime;
 using Jint.Runtime.CallStack;
 using Jint.Runtime.Debugger;
@@ -29,6 +29,13 @@ namespace Jint
 {
     public class Engine
     {
+        private static readonly ParserOptions DefaultParserOptions = new ParserOptions
+        {
+            AdaptRegexp = true,
+            Tolerant = false,
+            Loc = true
+        };
+
         private readonly ExpressionInterpreter _expressions;
         private readonly StatementInterpreter _statements;
         private readonly Stack<ExecutionContext> _executionContexts;
@@ -44,23 +51,22 @@ namespace Jint
 
         internal static Dictionary<Type, Func<Engine, object, JsValue>> TypeMappers = new Dictionary<Type, Func<Engine, object, JsValue>>()
         {
-            { typeof(bool), (Engine engine, object v) => new JsValue((bool)v) },
-            { typeof(byte), (Engine engine, object v) => new JsValue((byte)v) },
-            { typeof(char), (Engine engine, object v) => new JsValue((char)v) },
+            { typeof(bool), (Engine engine, object v) => (bool) v ? JsBoolean.True : JsBoolean.False },
+            { typeof(byte), (Engine engine, object v) => JsNumber.Create((byte)v) },
+            { typeof(char), (Engine engine, object v) => JsString.Create((char)v) },
             { typeof(DateTime), (Engine engine, object v) => engine.Date.Construct((DateTime)v) },
             { typeof(DateTimeOffset), (Engine engine, object v) => engine.Date.Construct((DateTimeOffset)v) },
-            { typeof(decimal), (Engine engine, object v) => new JsValue((double)(decimal)v) },
-            { typeof(double), (Engine engine, object v) => new JsValue((double)v) },
-            { typeof(Int16), (Engine engine, object v) => new JsValue((Int16)v) },
-            { typeof(Int32), (Engine engine, object v) => new JsValue((Int32)v) },
-            { typeof(Int64), (Engine engine, object v) => new JsValue((Int64)v) },
-            { typeof(SByte), (Engine engine, object v) => new JsValue((SByte)v) },
-            { typeof(Single), (Engine engine, object v) => new JsValue((Single)v) },
-            { typeof(string), (Engine engine, object v) => new JsValue((string)v) },
-            { typeof(UInt16), (Engine engine, object v) => new JsValue((UInt16)v) },
-            { typeof(UInt32), (Engine engine, object v) => new JsValue((UInt32)v) },
-            { typeof(UInt64), (Engine engine, object v) => new JsValue((UInt64)v) },
-            { typeof(JsValue), (Engine engine, object v) => (JsValue)v },
+            { typeof(decimal), (Engine engine, object v) => (JsValue) (double)(decimal)v },
+            { typeof(double), (Engine engine, object v) => (JsValue)(double)v },
+            { typeof(Int16), (Engine engine, object v) => JsNumber.Create((Int16)v) },
+            { typeof(Int32), (Engine engine, object v) => JsNumber.Create((Int32)v) },
+            { typeof(Int64), (Engine engine, object v) => (JsValue)(Int64)v },
+            { typeof(SByte), (Engine engine, object v) => JsNumber.Create((SByte)v) },
+            { typeof(Single), (Engine engine, object v) => (JsValue)(Single)v },
+            { typeof(string), (Engine engine, object v) => (JsValue) (string)v },
+            { typeof(UInt16), (Engine engine, object v) => JsNumber.Create((UInt16)v) },
+            { typeof(UInt32), (Engine engine, object v) => JsNumber.Create((UInt32)v) },
+            { typeof(UInt64), (Engine engine, object v) => JsNumber.Create((UInt64)v) },
             { typeof(System.Text.RegularExpressions.Regex), (Engine engine, object v) => engine.RegExp.Construct((System.Text.RegularExpressions.Regex)v, "") }
         };
 
@@ -79,6 +85,7 @@ namespace Jint
             Object = ObjectConstructor.CreateObjectConstructor(this);
             Function = FunctionConstructor.CreateFunctionConstructor(this);
 
+            Symbol = SymbolConstructor.CreateSymbolConstructor(this);
             Array = ArrayConstructor.CreateArrayConstructor(this);
             String = StringConstructor.CreateStringConstructor(this);
             RegExp = RegExpConstructor.CreateRegExpConstructor(this);
@@ -96,6 +103,8 @@ namespace Jint
             TypeError = ErrorConstructor.CreateErrorConstructor(this, "TypeError");
             UriError = ErrorConstructor.CreateErrorConstructor(this, "URIError");
 
+            GlobalSymbolRegistry = new GlobalSymbolRegistry();
+
             // Because the properties might need some of the built-in object
             // their configuration is delayed to a later step
 
@@ -103,6 +112,9 @@ namespace Jint
 
             Object.Configure();
             Object.PrototypeObject.Configure();
+
+            Symbol.Configure();
+            Symbol.PrototypeObject.Configure();
 
             Function.Configure();
             Function.PrototypeObject.Configure();
@@ -144,7 +156,7 @@ namespace Jint
                 options(Options);
             }
 
-            Eval = new EvalFunctionInstance(this, new string[0], LexicalEnvironment.NewDeclarativeEnvironment(this, ExecutionContext.LexicalEnvironment), StrictModeScope.IsStrictModeCode);
+            Eval = new EvalFunctionInstance(this, System.Array.Empty<string>(), LexicalEnvironment.NewDeclarativeEnvironment(this, ExecutionContext.LexicalEnvironment), StrictModeScope.IsStrictModeCode);
             Global.FastAddProperty("eval", Eval, true, false, true);
 
             _statements = new StatementInterpreter(this);
@@ -165,7 +177,6 @@ namespace Jint
         }
 
         public LexicalEnvironment GlobalEnvironment;
-
         public GlobalObject Global { get; private set; }
         public ObjectConstructor Object { get; private set; }
         public FunctionConstructor Function { get; private set; }
@@ -177,6 +188,7 @@ namespace Jint
         public DateConstructor Date { get; private set; }
         public MathInstance Math { get; private set; }
         public JsonInstance Json { get; private set; }
+        public SymbolConstructor Symbol { get; private set; }
         public EvalFunctionInstance Eval { get; private set; }
 
         public ErrorConstructor Error { get; private set; }
@@ -188,6 +200,8 @@ namespace Jint
         public ErrorConstructor UriError { get; private set; }
 
         public ExecutionContext ExecutionContext { get { return _executionContexts.Peek(); } }
+
+        public GlobalSymbolRegistry GlobalSymbolRegistry { get; }
 
         internal Options Options { get; private set; }
 
@@ -239,17 +253,22 @@ namespace Jint
 
         public Engine SetValue(string name, string value)
         {
-            return SetValue(name, new JsValue(value));
+            return SetValue(name, (JsValue) value);
         }
 
         public Engine SetValue(string name, double value)
         {
-            return SetValue(name, new JsValue(value));
+            return SetValue(name, JsNumber.Create(value));
+        }
+
+        public Engine SetValue(string name, int value)
+        {
+            return SetValue(name, JsNumber.Create(value));
         }
 
         public Engine SetValue(string name, bool value)
         {
-            return SetValue(name, new JsValue(value));
+            return SetValue(name, value ? JsBoolean.True : JsBoolean.False);
         }
 
         public Engine SetValue(string name, JsValue value)
@@ -292,12 +311,7 @@ namespace Jint
 
         public Engine Execute(string source)
         {
-            return Execute(source, new ParserOptions
-            {
-                AdaptRegexp = true,
-                Tolerant = false,
-                Loc = true
-            });
+            return Execute(source, DefaultParserOptions);
         }
 
         public Engine Execute(string source, ParserOptions parserOptions)
@@ -393,7 +407,7 @@ namespace Jint
                     return _statements.ExecuteForInStatement(statement.As<ForInStatement>());
 
                 case Nodes.FunctionDeclaration:
-                    return new Completion(Completion.Normal, null, null);
+                    return Completion.Empty;
 
                 case Nodes.IfStatement:
                     return _statements.ExecuteIfStatement(statement.As<IfStatement>());
@@ -430,7 +444,7 @@ namespace Jint
             }
         }
 
-        public object EvaluateExpression(Expression expression)
+        public object EvaluateExpression(INode expression)
         {
             _lastSyntaxNode = expression;
 
@@ -529,7 +543,7 @@ namespace Jint
                 {
                     return baseValue;
                 }
-                
+
                 if (reference.HasPrimitiveBase() == false)
                 {
                     var o = TypeConverter.ToObject(this, baseValue);
@@ -550,7 +564,7 @@ namespace Jint
                     }
 
                     var getter = desc.Get;
-                    if (getter == Undefined.Instance)
+                    if (ReferenceEquals(getter, Undefined.Instance))
                     {
                         return Undefined.Instance;
                     }
@@ -559,17 +573,14 @@ namespace Jint
                     return callable.Call(baseValue, Arguments.Empty);
                 }
             }
-            else
+
+            var record = (EnvironmentRecord) baseValue;
+            if (record == null)
             {
-                var record = baseValue.As<EnvironmentRecord>();
-
-                if (record == null)
-                {
-                    throw new ArgumentException();
-                }
-
-                return record.GetBindingValue(reference.GetReferencedName(), reference.IsStrict());
+                throw new ArgumentException();
             }
+
+            return record.GetBindingValue(reference.GetReferencedName(), reference.IsStrict());
         }
 
         /// <summary>
@@ -665,7 +676,8 @@ namespace Jint
         /// <summary>
         /// Invoke the current value as function.
         /// </summary>
-        /// <param name="propertyName">The arguments of the function call.</param>
+        /// <param name="propertyName">The name of the function to call.</param>
+        /// <param name="arguments">The arguments of the function call.</param>
         /// <returns>The value returned by the function call.</returns>
         public JsValue Invoke(string propertyName, params object[] arguments)
         {
@@ -713,7 +725,12 @@ namespace Jint
                 throw new ArgumentException("Can only invoke functions");
             }
 
-            return callable.Call(JsValue.FromObject(this, thisObj), arguments.Select(x => JsValue.FromObject(this, x)).ToArray());
+            var items = new JsValue[arguments.Length];
+            for (int i = 0; i < arguments.Length; ++i)
+            {
+                items[i] = JsValue.FromObject(this, arguments[i]);
+            }
+            return callable.Call(JsValue.FromObject(this, thisObj), items);
         }
 
         /// <summary>
@@ -751,7 +768,12 @@ namespace Jint
         }
 
         //  http://www.ecma-international.org/ecma-262/5.1/#sec-10.5
-        public void DeclarationBindingInstantiation(DeclarationBindingType declarationBindingType, IEnumerable<FunctionDeclaration> functionDeclarations, IEnumerable<VariableDeclaration> variableDeclarations, FunctionInstance functionInstance, JsValue[] arguments)
+        public void DeclarationBindingInstantiation(
+            DeclarationBindingType declarationBindingType,
+            IList<FunctionDeclaration> functionDeclarations,
+            IList<VariableDeclaration> variableDeclarations,
+            FunctionInstance functionInstance,
+            JsValue[] arguments)
         {
             var env = ExecutionContext.VariableEnvironment.Record;
             bool configurableBindings = declarationBindingType == DeclarationBindingType.EvalCode;
@@ -761,8 +783,9 @@ namespace Jint
             {
                 var argCount = arguments.Length;
                 var n = 0;
-                foreach (var argName in functionInstance.FormalParameters)
+                for (var i = 0; i < functionInstance.FormalParameters.Length; i++)
                 {
+                    var argName = functionInstance.FormalParameters[i];
                     n++;
                     var v = n > argCount ? Undefined.Instance : arguments[n - 1];
                     var argAlreadyDeclared = env.HasBinding(argName);
@@ -775,8 +798,9 @@ namespace Jint
                 }
             }
 
-            foreach (var f in functionDeclarations)
+            for (var i = 0; i < functionDeclarations.Count; i++)
             {
+                var f = functionDeclarations[i];
                 var fn = f.Id.Name;
                 var fo = Function.CreateFunctionObject(f);
                 var funcAlreadyDeclared = env.HasBinding(fn);
@@ -793,12 +817,12 @@ namespace Jint
                         if (existingProp.Configurable.Value)
                         {
                             go.DefineOwnProperty(fn,
-                                                 new PropertyDescriptor(
-                                                     value: Undefined.Instance,
-                                                     writable: true,
-                                                     enumerable: true,
-                                                     configurable: configurableBindings
-                                                     ), true);
+                                new PropertyDescriptor(
+                                    value: Undefined.Instance,
+                                    writable: true,
+                                    enumerable: true,
+                                    configurable: configurableBindings
+                                ), true);
                         }
                         else
                         {
@@ -839,14 +863,19 @@ namespace Jint
             }
 
             // process all variable declarations in the current parser scope
-            foreach (var d in variableDeclarations.SelectMany(x => x.Declarations))
+            for (var i = 0; i < variableDeclarations.Count; i++)
             {
-                var dn = d.Id.As<Identifier>().Name;
-                var varAlreadyDeclared = env.HasBinding(dn);
-                if (!varAlreadyDeclared)
+                var variableDeclaration = variableDeclarations[i];
+                var declarations  = variableDeclaration.Declarations;
+                foreach (var d in declarations)
                 {
-                    env.CreateMutableBinding(dn, configurableBindings);
-                    env.SetMutableBinding(dn, Undefined.Instance, strict);
+                    var dn = d.Id.As<Identifier>().Name;
+                    var varAlreadyDeclared = env.HasBinding(dn);
+                    if (!varAlreadyDeclared)
+                    {
+                        env.CreateMutableBinding(dn, configurableBindings);
+                        env.SetMutableBinding(dn, Undefined.Instance, strict);
+                    }
                 }
             }
         }

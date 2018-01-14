@@ -1,17 +1,19 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using Esprima;
 using Esprima.Ast;
 using Jint.Native.Object;
 using Jint.Native.String;
 using Jint.Runtime;
+using Jint.Runtime.Descriptors.Specialized;
 using Jint.Runtime.Environments;
 
 namespace Jint.Native.Function
 {
     public sealed class FunctionConstructor : FunctionInstance, IConstructor
     {
+        private static readonly ParserOptions ParserOptions = new ParserOptions { AdaptRegexp = true, Tolerant = false };
+
         private FunctionConstructor(Engine engine):base(engine, null, null, false)
         {
         }
@@ -27,9 +29,8 @@ namespace Jint.Native.Function
             // The value of the [[Prototype]] internal property of the Function constructor is the standard built-in Function prototype object
             obj.Prototype = obj.PrototypeObject;
 
-            obj.FastAddProperty("prototype", obj.PrototypeObject, false, false, false);
-
-            obj.FastAddProperty("length", 1, false, false, false);
+            obj.SetOwnProperty("prototype", new AllForbiddenPropertyDescriptor(obj.PrototypeObject));
+            obj.SetOwnProperty("length", new AllForbiddenPropertyDescriptor(1));
 
             return obj;
         }
@@ -48,7 +49,12 @@ namespace Jint.Native.Function
 
         private string[] ParseArgumentNames(string parameterDeclaration)
         {
-            string[] values = parameterDeclaration.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            if (string.IsNullOrWhiteSpace(parameterDeclaration))
+            {
+                return System.Array.Empty<string>();
+            }
+
+            string[] values = parameterDeclaration.Split(ArgumentNameSeparator, StringSplitOptions.RemoveEmptyEntries);
 
             var newValues = new string[values.Length];
             for (var i = 0; i < values.Length; i++)
@@ -86,7 +92,7 @@ namespace Jint.Native.Function
             try
             {
                 var functionExpression = "function f(" + p + ") { " + body + "}";
-                var parser = new JavaScriptParser(functionExpression, new ParserOptions { AdaptRegexp = true, Tolerant = false });
+                var parser = new JavaScriptParser(functionExpression, ParserOptions);
                 function = parser.ParseProgram().Body.First().As<IFunction>();
             }
             catch (ParserException)
@@ -123,6 +129,7 @@ namespace Jint.Native.Function
         }
 
         private FunctionInstance _throwTypeError;
+        private static readonly char[] ArgumentNameSeparator = new[] { ',' };
 
         public FunctionInstance ThrowTypeError
         {
@@ -154,7 +161,7 @@ namespace Jint.Native.Function
                 throw new JavaScriptException(Engine.TypeError);
             }
 
-            if (argArray == Null.Instance || argArray == Undefined.Instance)
+            if (ReferenceEquals(argArray, Undefined) || ReferenceEquals(argArray, Undefined))
             {
                 return func.Call(thisArg, Arguments.Empty);
             }
@@ -167,14 +174,14 @@ namespace Jint.Native.Function
 
             var len = argArrayObj.Get("length");
             var n = TypeConverter.ToUint32(len);
-            var argList = new List<JsValue>();
+            var argList = new JsValue[n];
             for (var index = 0; index < n; index++)
             {
-                var indexName = index.ToString();
+                var indexName = TypeConverter.ToString(index);
                 var nextArg = argArrayObj.Get(indexName);
-                argList.Add(nextArg);
+                argList[index] = nextArg;
             }
-            return func.Call(thisArg, argList.ToArray());
+            return func.Call(thisArg, argList);
         }
     }
 }

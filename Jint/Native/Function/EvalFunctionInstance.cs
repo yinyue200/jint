@@ -1,18 +1,21 @@
 ﻿using Esprima;
 using Jint.Runtime;
+using Jint.Runtime.Descriptors.Specialized;
 using Jint.Runtime.Environments;
 
 namespace Jint.Native.Function
 {
     public class EvalFunctionInstance: FunctionInstance
     {
+        private static readonly ParserOptions ParserOptions = new ParserOptions { AdaptRegexp = true, Tolerant = false };
+
         private readonly Engine _engine;
 
         public EvalFunctionInstance(Engine engine, string[] parameters, LexicalEnvironment scope, bool strict) : base(engine, parameters, scope, strict)
         {
             _engine = engine;
             Prototype = Engine.Function.PrototypeObject;
-            FastAddProperty("length", 1, false, false, false);
+            SetOwnProperty("length", new AllForbiddenPropertyDescriptor(1));
         }
 
         public override JsValue Call(JsValue thisObject, JsValue[] arguments)
@@ -31,7 +34,7 @@ namespace Jint.Native.Function
 
             try
             {
-                var parser = new JavaScriptParser(code, new ParserOptions { AdaptRegexp = true, Tolerant = false });
+                var parser = new JavaScriptParser(code, ParserOptions);
                 var program = parser.ParseProgram(StrictModeScope.IsStrictModeCode);
                 using (new StrictModeScope(program.Strict))
                 {

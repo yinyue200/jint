@@ -25,7 +25,7 @@ namespace Jint.Runtime
 
         public Completion ExecuteEmptyStatement(EmptyStatement emptyStatement)
         {
-            return new Completion(Completion.Normal, null, null);
+            return Completion.Empty;
         }
 
         public Completion ExecuteExpressionStatement(ExpressionStatement expressionStatement)
@@ -49,7 +49,7 @@ namespace Jint.Runtime
             }
             else
             {
-                return new Completion(Completion.Normal, null, null);
+                return Completion.Empty;
             }
 
             return result;
@@ -215,11 +215,10 @@ namespace Jint.Runtime
             var varRef = _engine.EvaluateExpression(identifier) as Reference;
             var exprRef = _engine.EvaluateExpression(forInStatement.Right);
             var experValue = _engine.GetValue(exprRef);
-            if (experValue == Undefined.Instance || experValue == Null.Instance)
+            if (ReferenceEquals(experValue, Undefined.Instance) || ReferenceEquals(experValue,  Null.Instance))
             {
-                return new Completion(Completion.Normal, null, null);
+                return Completion.Empty;
             }
-
 
             var obj = TypeConverter.ToObject(_engine, experValue);
             JsValue v = Null.Instance;
@@ -234,7 +233,7 @@ namespace Jint.Runtime
 
                 for (var i = 0; i < keys.GetLength(); i++)
                 {
-                    var p = keys.GetOwnProperty(i.ToString()).Value.AsString();
+                    var p = keys.GetOwnProperty(TypeConverter.ToString(i)).Value.AsString();
 
                     if (processedKeys.Contains(p))
                     {
@@ -365,7 +364,7 @@ namespace Jint.Runtime
             return r;
         }
 
-        public Completion ExecuteSwitchBlock(IEnumerable<SwitchCase> switchBlock, JsValue input)
+        public Completion ExecuteSwitchBlock(List<SwitchCase> switchBlock, JsValue input)
         {
             JsValue v = Undefined.Instance;
             SwitchCase defaultCase = null;
@@ -413,9 +412,9 @@ namespace Jint.Runtime
             return new Completion(Completion.Normal, v, null);
         }
 
-        public Completion ExecuteStatementList(IEnumerable<StatementListItem> statementList)
+        public Completion ExecuteStatementList(List<StatementListItem> statementList)
         {
-            var c = new Completion(Completion.Normal, null, null);
+            var c = Completion.Empty;
             Completion sl = c;
             Statement s = null;
 
@@ -528,7 +527,7 @@ namespace Jint.Runtime
                 }
             }
 
-            return new Completion(Completion.Normal, Undefined.Instance, null);
+            return Completion.EmptyUndefined;
         }
 
         public Completion ExecuteBlockStatement(BlockStatement blockStatement)
@@ -548,7 +547,7 @@ namespace Jint.Runtime
                 System.Diagnostics.Debugger.Break();
             }
 
-            return new Completion(Completion.Normal, null, null);
+            return Completion.Empty;
         }
     }
 }

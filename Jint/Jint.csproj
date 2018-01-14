@@ -1,5 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <NeutralLanguage>en-US</NeutralLanguage>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -8,8 +7,7 @@
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Version>2.11.60-casing</Version>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="Esprima" Version="1.0.0-beta-1000" /> 
+    <PackageReference Include="Esprima" Version="1.0.0-beta-1023" />
   </ItemGroup>
 </Project>

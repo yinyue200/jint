@@ -311,6 +311,28 @@ namespace Jint.Tests.Runtime
         }
 
         [Fact]
+        public void DenseArrayTurnsToSparseArrayWhenSizeGrowsTooMuch()
+        {
+            RunTest(@"
+                var n = 1024*10+2;
+                var o = Array(n);
+                for (var i = 0; i < n; i++) o[i] = i;
+                assert(o[0] == 0);
+                assert(o[n - 1] == n -1);
+            ");
+        }
+
+        [Fact]
+        public void DenseArrayTurnsToSparseArrayWhenSparseIndexed()
+        {
+            RunTest(@"
+                var o = Array();
+                o[100] = 1;
+                assert(o[100] == 1);
+            ");
+        }
+
+        [Fact]
         public void ArrayPopShouldDecrementLength()
         {
             RunTest(@"
@@ -1214,6 +1236,30 @@ namespace Jint.Tests.Runtime
         }
 
         [Fact]
+        public void ShouldExecuteKnockoutWithErrorWhenIntolerant()
+        {
+            var content = GetEmbeddedFile("knockout-3.4.0.js");
+
+            var ex = Assert.Throws<ParserException>(() => _engine.Execute(content, new ParserOptions {Tolerant = false}));
+            Assert.Contains("Duplicate __proto__ fields are not allowed in object literals", ex.Message);
+        }
+
+        [Fact]
+        public void ShouldExecuteKnockoutWithoutErrorWhenTolerant()
+        {
+            var content = GetEmbeddedFile("knockout-3.4.0.js");
+            _engine.Execute(content, new ParserOptions {Tolerant = true});
+        }
+
+        [Fact]
+        public void ShouldExecuteLodash()
+        {
+            var content = GetEmbeddedFile("lodash.min.js");
+
+            RunTest(content);
+        }
+
+        [Fact]
         public void DateParseReturnsNaN()
         {
             RunTest(@"
@@ -1830,8 +1876,9 @@ namespace Jint.Tests.Runtime
                 var newstr = str.replace(re, '$\'x');
                 equal('babxbbxb', newstr);
             ");
-        }        [Fact]
+        }
 
+        [Fact]
         public void ExceptionShouldHaveLocationOfInnerFunction()
         {
             try
@@ -1893,7 +1940,7 @@ namespace Jint.Tests.Runtime
 
             Assert.True(val.AsString() == "53.6841659");
         }
-		
+
         [Theory]
         [InlineData("", "escape('')")]
         [InlineData("%u0100%u0101%u0102", "escape('\u0100\u0101\u0102')")]
@@ -2171,6 +2218,61 @@ namespace Jint.Tests.Runtime
             var result = engine.Execute(source).GetCompletionValue().ToObject();
 
             Assert.Equal(expected, result);
+        }
+
+        /// <summary>
+        /// Tests for startsWith - tests created from MDN and https://github.com/mathiasbynens/String.prototype.startsWith/blob/master/tests/tests.js
+        /// </summary>
+        [Theory]
+        [InlineData("'To be, or not to be, that is the question.'.startsWith('To be')", true)]
+        [InlineData("'To be, or not to be, that is the question.'.startsWith('not to be')", false)]
+        [InlineData("'To be, or not to be, that is the question.'.startsWith()", false)]
+        [InlineData("'To be, or not to be, that is the question.'.startsWith('not to be', 10)", true)]
+        [InlineData("'undefined'.startsWith()", true)]
+        [InlineData("'undefined'.startsWith(undefined)", true)]
+        [InlineData("'undefined'.startsWith(null)", false)]
+        [InlineData("'null'.startsWith()", false)]
+        [InlineData("'null'.startsWith(undefined)", false)]
+        [InlineData("'null'.startsWith(null)", true)]
+        [InlineData("'abc'.startsWith()", false)]
+        [InlineData("'abc'.startsWith('')", true)]
+        [InlineData("'abc'.startsWith('\0')", false)]
+        [InlineData("'abc'.startsWith('a')", true)]
+        [InlineData("'abc'.startsWith('b')", false)]
+        [InlineData("'abc'.startsWith('ab')", true)]
+        [InlineData("'abc'.startsWith('bc')", false)]
+        [InlineData("'abc'.startsWith('abc')", true)]
+        [InlineData("'abc'.startsWith('bcd')", false)]
+        [InlineData("'abc'.startsWith('abcd')", false)]
+        [InlineData("'abc'.startsWith('bcde')", false)]
+        [InlineData("'abc'.startsWith('', 1)", true)]
+        [InlineData("'abc'.startsWith('\0', 1)", false)]
+        [InlineData("'abc'.startsWith('a', 1)", false)]
+        [InlineData("'abc'.startsWith('b', 1)", true)]
+        [InlineData("'abc'.startsWith('ab', 1)", false)]
+        [InlineData("'abc'.startsWith('bc', 1)", true)]
+        [InlineData("'abc'.startsWith('abc', 1)", false)]
+        [InlineData("'abc'.startsWith('bcd', 1)", false)]
+        [InlineData("'abc'.startsWith('abcd', 1)", false)]
+        [InlineData("'abc'.startsWith('bcde', 1)", false)]
+        public void ShouldStartWith(string source, object expected)
+        {
+            var engine = new Engine();
+            var result = engine.Execute(source).GetCompletionValue().ToObject();
+
+            Assert.Equal(expected, result);
+        }
+
+        [Theory]
+        [InlineData("throw {}", "undefined")]
+        [InlineData("throw {message:null}","null")]
+        [InlineData("throw {message:''}","")]
+        [InlineData("throw {message:2}","2")]
+        public void ShouldAllowNonStringMessage(string source, string expected)
+        {
+            var engine = new Engine();
+            var ex = Assert.Throws<JavaScriptException>(() => engine.Execute(source));
+            Assert.Equal(expected, ex.Message);
         }
     }
 }

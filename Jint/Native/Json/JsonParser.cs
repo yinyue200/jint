@@ -146,7 +146,7 @@ namespace Jint.Native.Json
                     return new Token
                         {
                             Type = Tokens.Punctuator,
-                            Value = code.ToString(),
+                            Value = TypeConverter.ToString(code),
                             LineNumber = _lineNumber,
                             LineStart = _lineStart,
                             Range = new[] {start, _index}
@@ -614,8 +614,9 @@ namespace Jint.Native.Json
 
         public ObjectInstance CreateArrayInstance(IEnumerable<JsValue> values)
         {
-            var jsArray = _engine.Array.Construct(Arguments.Empty);
-            _engine.Array.PrototypeObject.Push(jsArray, values.ToArray());
+            var jsValues = values.ToArray();
+            var jsArray = _engine.Array.Construct(jsValues.Length);
+            _engine.Array.PrototypeObject.Push(jsArray, jsValues);
             return jsArray;
         }
 
@@ -787,11 +788,13 @@ namespace Jint.Native.Json
                     var v = Lex().Value;
                     return Null.Instance;
                 case Tokens.BooleanLiteral:
-                    return new JsValue((bool)Lex().Value);
+                    // implicit conversion operator goes through caching
+                    return (bool) Lex().Value ? JsBoolean.True : JsBoolean.False;
                 case Tokens.String:
-                    return new JsValue((string)Lex().Value);
+                    // implicit conversion operator goes through caching
+                    return (string) Lex().Value;
                 case Tokens.Number:
-                    return new JsValue((double)Lex().Value);
+                    return (double) Lex().Value;
             }
 
             if (Match("["))

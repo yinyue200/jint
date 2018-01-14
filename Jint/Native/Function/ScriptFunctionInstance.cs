@@ -1,8 +1,9 @@
-﻿using System.Linq;
+﻿using System.Runtime.CompilerServices;
 using Esprima.Ast;
 using Jint.Native.Object;
 using Jint.Runtime;
 using Jint.Runtime.Descriptors;
+using Jint.Runtime.Descriptors.Specialized;
 using Jint.Runtime.Environments;
 
 namespace Jint.Native.Function
@@ -22,7 +23,7 @@ namespace Jint.Native.Function
         /// <param name="scope"></param>
         /// <param name="strict"></param>
         public ScriptFunctionInstance(Engine engine, IFunction functionDeclaration, LexicalEnvironment scope, bool strict)
-            : base(engine, functionDeclaration.Params.Select(x => x.As<Identifier>().Name).ToArray(), scope, strict)
+            : base(engine, GetParameterNames(functionDeclaration), scope, strict)
         {
             _functionDeclaration = functionDeclaration;
 
@@ -30,14 +31,14 @@ namespace Jint.Native.Function
             Extensible = true;
             Prototype = engine.Function.PrototypeObject;
 
-            DefineOwnProperty("length", new PropertyDescriptor(new JsValue(FormalParameters.Length), false, false, false ), false);
+            DefineOwnProperty("length", new AllForbiddenPropertyDescriptor(JsNumber.Create(FormalParameters.Length)), false);
 
             var proto = engine.Object.Construct(Arguments.Empty);
-            proto.DefineOwnProperty("constructor", new PropertyDescriptor(this, true, false, true), false);
-            DefineOwnProperty("prototype", new PropertyDescriptor(proto, true, false, false ), false);
+            proto.SetOwnProperty("constructor", new NonEnumerablePropertyDescriptor(this));
+            SetOwnProperty("prototype", new WritablePropertyDescriptor(proto));
             if (_functionDeclaration.Id != null)
             {
-                DefineOwnProperty("name", new PropertyDescriptor(_functionDeclaration.Id.Name, null, null, null), false);
+                DefineOwnProperty("name", new NullConfigurationPropertyDescriptor(_functionDeclaration.Id.Name), false);
             }
 
             if (strict)
@@ -46,6 +47,26 @@ namespace Jint.Native.Function
                 DefineOwnProperty("caller", new PropertyDescriptor(thrower, thrower, false, false), false);
                 DefineOwnProperty("arguments", new PropertyDescriptor(thrower, thrower, false, false), false);
             }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static string[] GetParameterNames(IFunction functionDeclaration)
+        {
+            var list = functionDeclaration.Params;
+            var count = list.Count;
+
+            if (count == 0)
+            {
+                return System.Array.Empty<string>();
+            }
+
+            var names = new string[count];
+            for (var i = 0; i < count; ++i)
+            {
+                names[i] = ((Identifier) list[i]).Name;
+            }
+
+            return names;
         }
 
         /// <summary>
@@ -64,7 +85,7 @@ namespace Jint.Native.Function
                 {
                     thisBinding = thisArg;
                 }
-                else if (thisArg == Undefined.Instance || thisArg == Null.Instance)
+                else if (ReferenceEquals(thisArg, Undefined) || ReferenceEquals(thisArg, Null))
                 {
                     thisBinding = Engine.Global;
                 }
@@ -109,7 +130,7 @@ namespace Jint.Native.Function
                     Engine.LeaveExecutionContext();
                 }
 
-                return Undefined.Instance;
+                return Undefined;
             }
         }
 
@@ -133,7 +154,5 @@ namespace Jint.Native.Function
 
             return obj;
         }
-
-        public ObjectInstance PrototypeObject { get; private set; }
     }
 }
